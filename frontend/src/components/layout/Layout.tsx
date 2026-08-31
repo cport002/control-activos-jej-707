@@ -55,7 +55,7 @@ export default function Layout({ auth }: Props) {
           transform transition-transform duration-200
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
-        style={{ background: 'linear-gradient(180deg, #312e81 0%, #4338ca 100%)' }}
+        style={{ background: 'linear-gradient(180deg, #042f2e 0%, #0f766e 100%)' }}
       >
         <div className="px-5 py-5 border-b border-white/10 flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-white p-1 flex items-center justify-center flex-shrink-0">
