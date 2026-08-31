@@ -33,7 +33,7 @@ export default function LoginPage({ onLogin }: Props) {
     <div className="min-h-screen flex bg-gray-100">
       <div
         className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative overflow-hidden items-center justify-center p-16"
-        style={{ background: 'linear-gradient(160deg, #312e81 0%, #4338ca 60%, #7e22ce 100%)' }}
+        style={{ background: 'linear-gradient(160deg, #042f2e 0%, #0f766e 60%, #059669 100%)' }}
       >
         <div className="absolute inset-0 opacity-10"
           style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }} />
@@ -120,7 +120,7 @@ export default function LoginPage({ onLogin }: Props) {
               className="w-full flex items-center justify-center gap-2 mt-2 py-2.5 rounded-lg
                          font-bold text-sm text-white transition-all duration-150
                          disabled:opacity-40 active:scale-[.98] shadow-sm hover:shadow-md"
-              style={{ background: 'linear-gradient(135deg, #4338ca, #7e22ce)' }}
+              style={{ background: 'linear-gradient(135deg, #0f766e, #059669)' }}
             >
               {loading
                 ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Ingresando…</>

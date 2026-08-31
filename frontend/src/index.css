@@ -19,7 +19,7 @@
   ::-webkit-scrollbar { width: 5px; height: 5px; }
   ::-webkit-scrollbar-track { background: #f4f4f6; }
   ::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
-  ::-webkit-scrollbar-thumb:hover { background: #4338ca; }
+  ::-webkit-scrollbar-thumb:hover { background: #0f766e; }
 }
 
 @layer components {
