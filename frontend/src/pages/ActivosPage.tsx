@@ -1,0 +1,275 @@
+import { useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import * as XLSX from 'xlsx'
+import api from '../services/api'
+import type { Activo, Profesional } from '../types'
+import { TIPOS_ACTIVO } from '../types'
+import { useAuth } from '../hooks/useAuth'
+import toast from 'react-hot-toast'
+import { Plus, Search, Boxes, ChevronRight, FileDown, Camera } from 'lucide-react'
+import PageHeader from '../components/ui/PageHeader'
+import { composeNotas, type DetalleTecnico } from '../utils/notas'
+
+const estadoBadge: Record<string, string> = { disponible: 'badge-green', asignado: 'badge-blue', de_baja: 'badge-gray' }
+const estadoLabel: Record<string, string> = { disponible: 'disponible', asignado: 'asignado', de_baja: 'de baja' }
+
+const FORM_INICIAL = { nombre: '', tipo: 'Notebook', marca: '', modelo: '', numero_serie: '', accesorios: '', profesional_id: '', propietario: 'JEJ' }
+const DETALLE_INICIAL: DetalleTecnico = { procesador: '', ram: '', disco: '', so: '', gama: '', resto: '' }
+
+export default function ActivosPage() {
+  const { puedeEditar } = useAuth()
+  const [searchParams] = useSearchParams()
+  const [activos, setActivos] = useState<Activo[]>([])
+  const [profesionales, setProfesionales] = useState<Profesional[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busqueda, setBusqueda] = useState('')
+  const [filtroEstado, setFiltroEstado] = useState(searchParams.get('estado') || '')
+  const [filtroTipo, setFiltroTipo] = useState('')
+  const [filtroPropietario, setFiltroPropietario] = useState(searchParams.get('propietario') || '')
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState(FORM_INICIAL)
+  const [detalle, setDetalle] = useState<DetalleTecnico>(DETALLE_INICIAL)
+  const [foto, setFoto] = useState<File | null>(null)
+
+  const cargar = () => {
+    const params: any = {}
+    if (busqueda) params.busqueda = busqueda
+    if (filtroEstado) params.estado = filtroEstado
+    if (filtroTipo) params.tipo = filtroTipo
+    if (filtroPropietario) params.propietario = filtroPropietario
+    api.get('/activos', { params }).then(r => { setActivos(r.data); setLoading(false) }).catch(() => setLoading(false))
+  }
+  useEffect(cargar, [busqueda, filtroEstado, filtroTipo, filtroPropietario])
+  useEffect(() => { api.get('/profesionales').then(r => setProfesionales(r.data)).catch(() => {}) }, [])
+
+  const abrirNuevo = () => { setForm(FORM_INICIAL); setDetalle(DETALLE_INICIAL); setFoto(null); setShowForm(true) }
+
+  const exportarExcel = () => {
+    const filas = activos.map(a => ({
+      Nombre: a.nombre,
+      Tipo: a.tipo,
+      Marca: a.marca || '',
+      Modelo: a.modelo || '',
+      'N° Serie': a.numero_serie || '',
+      'Rótulo Codelco': a.rotulo_codelco || '',
+      Propietario: a.propietario === 'Codelco' ? 'Codelco (préstamo)' : 'JEJ',
+      'Asignado a': a.profesional_nombre || '',
+      Estado: estadoLabel[a.estado],
+      Ubicación: a.ubicacion === 'santiago' ? 'Santiago' : 'Salvador',
+      Accesorios: a.accesorios || '',
+      Notas: a.notas || '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(filas)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Activos')
+    XLSX.writeFile(wb, `Activos JEJ - ${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const fd = new FormData()
+      Object.entries(form).forEach(([k, v]) => fd.append(k, v))
+      fd.append('notas', composeNotas(detalle))
+      if (foto) fd.append('foto_equipo', foto)
+      await api.post('/activos', fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      toast.success('Activo registrado')
+      setShowForm(false)
+      cargar()
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Error al registrar el activo')
+    }
+  }
+
+  if (loading) return <div className="flex items-center justify-center h-64 text-gray-500">Cargando...</div>
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Activos"
+        subtitle={`${activos.length} activo${activos.length !== 1 ? 's' : ''}`}
+        icon={Boxes}
+        actions={
+          <div className="flex gap-2">
+            <button onClick={exportarExcel} className="inline-flex items-center gap-2 bg-white/10 text-white font-semibold text-sm px-4 py-2 rounded-xl hover:bg-white/20 transition-colors">
+              <FileDown className="w-4 h-4" /> Exportar Excel
+            </button>
+            {puedeEditar && (
+              <button onClick={abrirNuevo} className="inline-flex items-center gap-2 bg-white text-primary-700 font-semibold text-sm px-4 py-2 rounded-xl hover:bg-teal-50 transition-colors shadow-sm">
+                <Plus className="w-4 h-4" /> Nuevo Activo
+              </button>
+            )}
+          </div>
+        }
+      />
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input className="input pl-10" placeholder="Buscar por nombre, marca, modelo, N° serie o asignado a..." value={busqueda} onChange={e => setBusqueda(e.target.value)} />
+        </div>
+        <select className="input sm:w-48" value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
+          <option value="">Todos los tipos</option>
+          {TIPOS_ACTIVO.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select className="input sm:w-40" value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}>
+          <option value="">Todos</option>
+          <option value="disponible">Disponible</option>
+          <option value="asignado">Asignado</option>
+          <option value="de_baja">De baja</option>
+        </select>
+        <select className="input sm:w-44" value={filtroPropietario} onChange={e => setFiltroPropietario(e.target.value)}>
+          <option value="">Cualquier propietario</option>
+          <option value="JEJ">Propiedad JEJ</option>
+          <option value="Codelco">Préstamo Codelco</option>
+        </select>
+      </div>
+
+      <div className="card p-0 overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="table-header">Nombre</th>
+              <th className="table-header">Tipo</th>
+              <th className="table-header">Marca / Modelo</th>
+              <th className="table-header">N° Serie</th>
+              <th className="table-header">Asignado a</th>
+              <th className="table-header text-center">Estado</th>
+              <th className="table-header text-center">Ubicación</th>
+              <th className="table-header text-center">Propietario</th>
+              <th className="table-header"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {activos.map(a => (
+              <tr key={a.id} className="table-row">
+                <td className="table-cell font-medium">
+                  <span className="inline-flex items-center gap-1.5">
+                    {a.nombre}
+                    {a.foto_url && <Camera className="w-3.5 h-3.5 text-gray-300" />}
+                  </span>
+                </td>
+                <td className="table-cell text-gray-600">{a.tipo}</td>
+                <td className="table-cell text-gray-600">{[a.marca, a.modelo].filter(Boolean).join(' / ') || '-'}</td>
+                <td className="table-cell text-gray-600">{a.numero_serie || '-'}</td>
+                <td className="table-cell text-gray-600">{a.profesional_nombre || '-'}</td>
+                <td className="table-cell text-center"><span className={estadoBadge[a.estado]}>{estadoLabel[a.estado]}</span></td>
+                <td className="table-cell text-center">
+                  {a.ubicacion === 'santiago' ? <span className="badge-yellow">Santiago</span> : <span className="text-gray-300 text-xs">Salvador</span>}
+                </td>
+                <td className="table-cell text-center">
+                  {a.propietario === 'Codelco' ? <span className="badge-yellow">Codelco</span> : <span className="text-gray-300 text-xs">JEJ</span>}
+                </td>
+                <td className="table-cell">
+                  <Link to={`/activos/${a.id}`} className="text-gray-400 hover:text-primary-600 transition-colors">
+                    <ChevronRight className="w-5 h-5" />
+                  </Link>
+                </td>
+              </tr>
+            ))}
+            {activos.length === 0 && (
+              <tr><td colSpan={9} className="text-center py-12 text-gray-400">No hay activos que coincidan con el filtro</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {showForm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2>Nuevo Activo</h2>
+            </div>
+            <form onSubmit={handleCreate} className="p-6 space-y-4">
+              <div>
+                <label className="label">Nombre *</label>
+                <input className="input" value={form.nombre} onChange={e => setForm({ ...form, nombre: e.target.value })} placeholder="Ej: Radio Motorola DGP8550e" required />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Tipo</label>
+                  <select className="input" value={form.tipo} onChange={e => setForm({ ...form, tipo: e.target.value })}>
+                    {TIPOS_ACTIVO.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">N° de Serie</label>
+                  <input className="input" value={form.numero_serie} onChange={e => setForm({ ...form, numero_serie: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="label">Marca</label>
+                  <input className="input" value={form.marca} onChange={e => setForm({ ...form, marca: e.target.value })} />
+                </div>
+                <div>
+                  <label className="label">Modelo</label>
+                  <input className="input" value={form.modelo} onChange={e => setForm({ ...form, modelo: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <label className="label">Propietario</label>
+                <select className="input" value={form.propietario} onChange={e => setForm({ ...form, propietario: e.target.value })}>
+                  <option value="JEJ">JEJ</option>
+                  <option value="Codelco">Codelco (préstamo)</option>
+                </select>
+              </div>
+              <div>
+                <label className="label">Asignar a (opcional)</label>
+                <select className="input" value={form.profesional_id} onChange={e => setForm({ ...form, profesional_id: e.target.value })}>
+                  <option value="">Dejar disponible (asignar después)</option>
+                  {profesionales.map(p => <option key={p.id} value={p.id}>{p.nombre}{p.cargo ? ` — ${p.cargo}` : ''}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label">Accesorios incluidos</label>
+                <input className="input" value={form.accesorios} onChange={e => setForm({ ...form, accesorios: e.target.value })} placeholder="Ej: Cargador, Antena, Batería y Base de carga" />
+              </div>
+
+              <div className="pt-2 border-t border-gray-100">
+                <p className="label mb-2">Detalle técnico (opcional)</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label text-xs">Procesador</label>
+                    <input className="input" value={detalle.procesador} onChange={e => setDetalle({ ...detalle, procesador: e.target.value })} placeholder="Ej: Intel Core i7-1255U" />
+                  </div>
+                  <div>
+                    <label className="label text-xs">RAM</label>
+                    <input className="input" value={detalle.ram} onChange={e => setDetalle({ ...detalle, ram: e.target.value })} placeholder="Ej: 32 GB" />
+                  </div>
+                  <div>
+                    <label className="label text-xs">Disco</label>
+                    <input className="input" value={detalle.disco} onChange={e => setDetalle({ ...detalle, disco: e.target.value })} placeholder="Ej: 500 GB SSD" />
+                  </div>
+                  <div>
+                    <label className="label text-xs">Sistema Operativo</label>
+                    <input className="input" value={detalle.so} onChange={e => setDetalle({ ...detalle, so: e.target.value })} placeholder="Ej: Windows 11 Pro" />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="label text-xs">Gama</label>
+                    <input className="input" value={detalle.gama} onChange={e => setDetalle({ ...detalle, gama: e.target.value })} placeholder="Ej: Alta / Media / Básica" />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="label">Notas adicionales</label>
+                <textarea className="input" rows={2} value={detalle.resto} onChange={e => setDetalle({ ...detalle, resto: e.target.value })} />
+              </div>
+
+              <div>
+                <label className="label">Foto del equipo (opcional)</label>
+                <input type="file" accept="image/*" className="input" onChange={e => setFoto(e.target.files?.[0] || null)} />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Cancelar</button>
+                <button type="submit" className="btn-primary">Registrar Activo</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
